@@ -7,6 +7,15 @@
       <AnimatedCard :card="card" :last-played-card="lastPlayedCard" @play-card="playCard" />
     </div>
     <b-button class="mx-2 my-2" size="sm" @click="drawCard" :disabled="!myTurn">Draw Card</b-button>
+
+    <div>
+      <h3>Player Status:</h3>
+      <ul>
+        <li v-for="(status, index) in playerStatus" :key="index">
+          {{ status.name }}: {{ status.isLow ? '2 or fewer cards' : 'more than 2 cards' }}
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -36,6 +45,7 @@ const cards: Ref<Card[]> = ref([])
 const currentTurnPlayerIndex = ref(-1)
 const phase = ref("")
 const playCount = ref(-1)
+const playerStatus = ref<{ name: string; isLow: boolean }[]>([])
 
 const myTurn = computed(() => currentTurnPlayerIndex.value === playerIndex && phase.value !== "game-over")
 const lastPlayedCard = computed(() => getLastPlayedCard(cards.value))
@@ -48,10 +58,11 @@ socket.on("updated-cards", (updatedCards: Card[]) => {
   applyUpdatedCards(updatedCards)
 })
 
-socket.on("game-state", (newCurrentTurnPlayerIndex: number, newPhase: GamePhase, newPlayCount: number) => {
+socket.on("game-state", (newCurrentTurnPlayerIndex: number, newPhase: GamePhase, newPlayCount: number, newPlayerStatus: { name: string; isLow: boolean }[]) => {
   currentTurnPlayerIndex.value = newCurrentTurnPlayerIndex
   phase.value = newPhase
   playCount.value = newPlayCount
+  playerStatus.value = newPlayerStatus
 })
 
 function doAction(action: Action) {

@@ -1,6 +1,6 @@
 import http from "http"
 import { Server } from "socket.io"
-import { Action, createEmptyGame, doAction, filterCardsForPlayerPerspective, Card } from "./model"
+import { Action, createEmptyGame, doAction, filterCardsForPlayerPerspective, Card, computePlayerCardCounts } from "./model"
 
 const server = http.createServer()
 const io = new Server(server)
@@ -16,7 +16,7 @@ function emitUpdatedCardsForPlayers(cards: Card[], newGame = false) {
     }
     console.log("emitting update for player", i, ":", updatedCardsFromPlayerPerspective)
     io.to(String(i)).emit(
-      newGame ? "all-cards" : "updated-cards", 
+      newGame ? "all-cards" : "updated-cards",
       updatedCardsFromPlayerPerspective,
     )
   })
@@ -25,13 +25,17 @@ function emitUpdatedCardsForPlayers(cards: Card[], newGame = false) {
 io.on('connection', client => {
   function emitGameState() {
     client.emit(
-      "game-state", 
+      "game-state",
       gameState.currentTurnPlayerIndex,
       gameState.phase,
       gameState.playCount,
+      gameState.playerNames.map((name, index) => ({
+        name,
+        isLow: computePlayerCardCounts(gameState)[index] <= 2
+      }))
     )
   }
-  
+
   console.log("New client")
   let playerIndex: number | null | "all" = null
   client.on('player-index', n => {
@@ -40,13 +44,13 @@ io.on('connection', client => {
     client.join(String(n))
     if (typeof playerIndex === "number") {
       client.emit(
-        "all-cards", 
+        "all-cards",
         filterCardsForPlayerPerspective(Object.values(gameState.cardsById), playerIndex).filter(card => card.locationType !== "unused"),
       )
     } else {
       client.emit(
-        "all-cards", 
-        Object.values(gameState.cardsById),    
+        "all-cards",
+        Object.values(gameState.cardsById),
       )
     }
     emitGameState()
@@ -60,14 +64,18 @@ io.on('connection', client => {
       // no actions allowed from "all"
     }
     io.to("all").emit(
-      "updated-cards", 
-      Object.values(gameState.cardsById),    
+      "updated-cards",
+      Object.values(gameState.cardsById),
     )
     io.emit(
-      "game-state", 
+      "game-state",
       gameState.currentTurnPlayerIndex,
       gameState.phase,
       gameState.playCount,
+      gameState.playerNames.map((name, index) => ({
+        name,
+        isLow: computePlayerCardCounts(gameState)[index] <= 2
+      }))
     )
   })
 
@@ -76,7 +84,7 @@ io.on('connection', client => {
     const updatedCards = Object.values(gameState.cardsById)
     emitUpdatedCardsForPlayers(updatedCards, true)
     io.to("all").emit(
-      "all-cards", 
+      "all-cards",
       updatedCards,
     )
     emitGameState()
