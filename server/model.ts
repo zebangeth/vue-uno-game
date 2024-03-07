@@ -7,6 +7,11 @@ export const SUITS = ["♦️", "♥️", "♣️", "♠️"]
 export type CardId = string
 export type LocationType = "unused" | "last-card-played" | "player-hand"
 
+export interface Config {
+  numberOfDecks: number
+  rankLimit: number
+}
+
 export interface Card {
   id: CardId
   rank: typeof RANKS[number]

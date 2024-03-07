@@ -1,12 +1,17 @@
 import http from "http"
 import { Server } from "socket.io"
-import { Action, createEmptyGame, doAction, filterCardsForPlayerPerspective, Card, computePlayerCardCounts } from "./model"
+import { Action, createEmptyGame, doAction, filterCardsForPlayerPerspective, Card, computePlayerCardCounts, Config } from "./model"
 
 const server = http.createServer()
 const io = new Server(server)
 const port = 8101
 
-let gameState = createEmptyGame(["player1", "player2"], 2, 2)
+let gameConfig: Config = {
+  numberOfDecks: 2,
+  rankLimit: 2
+}
+
+let gameState = createEmptyGame(["player1", "player2"], gameConfig.numberOfDecks, gameConfig.rankLimit)
 
 function emitUpdatedCardsForPlayers(cards: Card[], newGame = false) {
   gameState.playerNames.forEach((_, i) => {
@@ -80,14 +85,53 @@ io.on('connection', client => {
   })
 
   client.on("new-game", () => {
-    gameState = createEmptyGame(gameState.playerNames, 2, 2)
+    gameState = createEmptyGame(gameState.playerNames, gameConfig.numberOfDecks, gameConfig.rankLimit)
     const updatedCards = Object.values(gameState.cardsById)
     emitUpdatedCardsForPlayers(updatedCards, true)
     io.to("all").emit(
       "all-cards",
       updatedCards,
     )
-    emitGameState()
+		io.emit(
+      "game-state",
+      gameState.currentTurnPlayerIndex,
+      gameState.phase,
+      gameState.playCount,
+		)
+  })
+
+  client.on("get-config", () => {
+    client.emit("get-config-reply", gameConfig)
+  })
+
+  client.on("update-config", (newConfig: Config) => {
+		console.log("Received update-config event with newConfig:", newConfig)
+		// const numberOfDecks = Number(newConfig.numberOfDecks)
+		// const rankLimit = Number(newConfig.rankLimit)
+    if (
+      // !Number.isNaN(numberOfDecks) &&
+      // !Number.isNaN(rankLimit) &&
+			typeof newConfig.numberOfDecks === "number" &&
+			typeof newConfig.rankLimit === "number" &&
+      newConfig.numberOfDecks > 0 &&
+      newConfig.rankLimit <= 13 &&
+      Object.keys(newConfig).length === 2
+    ) {
+			console.log("Valid newConfig, updating")
+      setTimeout(() => {
+        gameConfig = newConfig
+        gameState = createEmptyGame(gameState.playerNames, gameConfig.numberOfDecks, gameConfig.rankLimit)
+        const updatedCards = Object.values(gameState.cardsById)
+        emitUpdatedCardsForPlayers(updatedCards, true)
+        io.to("all").emit("all-cards", updatedCards)
+        emitGameState()
+				console.log("Sending update-config-reply event with success:", true)
+        client.emit("update-config-reply", true)
+      }, 2000)
+    } else {
+			console.log("Invalid newConfig, not updating")
+      client.emit("update-config-reply", false)
+    }
   })
 })
 server.listen(port)
